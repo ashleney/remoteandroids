@@ -1,0 +1,9 @@
+{
+  "item.remoteandroids.android_core": "Android Core",
+  "item.remoteandroids.neural_remote": "Neural Remote",
+  "item.remoteandroids.recall_core": "Recall Core",
+  "item.remoteandroids.inventory_lock": "Inventory Lock",
+  "itemGroup.remoteandroids": "Remote Androids",
+  "entity.remoteandroids.android": "Android",
+  "entity.remoteandroids.player_stand_in": "Player Stand-In"
+}
