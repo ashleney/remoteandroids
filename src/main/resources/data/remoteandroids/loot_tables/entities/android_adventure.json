@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "remoteandroids:android_core"
+          "name": "remoteandroids:adventure_core"
         }
       ]
     }

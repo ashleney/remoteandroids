@@ -47,10 +47,27 @@ minecraft {
 
 repositories {
     mavenCentral()
+    maven {
+        name = "Curios"
+        url = "https://maven.theillusivec4.top/"
+    }
+    maven {
+        name = "Curse Maven"
+        url = "https://cursemaven.com"
+    }
+    maven {
+        name = "Team Resourceful"
+        url = "https://maven.teamresourceful.com/repository/maven-public/"
+    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Optional mod APIs - compile only, not bundled
+    compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
+    runtimeOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
+    compileOnly fg.deobf("curse.maven:terrafirmacraft-302973:7730077") { transitive = false }
 }
 
 tasks.named('processResources', ProcessResources).configure {

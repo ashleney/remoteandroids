@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "remoteandroids:item/android_core"
+    "layer0": "remoteandroids:item/survival_core"
   }
 }

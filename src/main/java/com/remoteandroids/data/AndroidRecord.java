@@ -1,7 +1,10 @@
 package com.remoteandroids.data;
 
+import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
@@ -16,9 +19,13 @@ public class AndroidRecord {
 	public float yaw, pitch;
 	public float health;
 	public boolean idle;
+	public AndroidType androidType;
+	public ListTag inventory;
+	@Nullable
+	public ListTag curios;
 
 	public AndroidRecord(UUID id, ResourceKey<Level> dimension, Vec3 pos, float yaw, float pitch, float health,
-			boolean idle) {
+			boolean idle, AndroidType androidType, ListTag inventory, @Nullable ListTag curios) {
 		this.id = id;
 		this.dimension = dimension;
 		this.x = pos.x;
@@ -28,6 +35,9 @@ public class AndroidRecord {
 		this.pitch = pitch;
 		this.health = health;
 		this.idle = idle;
+		this.androidType = androidType;
+		this.inventory = inventory;
+		this.curios = curios;
 	}
 
 	public Vec3 pos() {
@@ -45,6 +55,11 @@ public class AndroidRecord {
 		tag.putFloat("Pitch", pitch);
 		tag.putFloat("Health", health);
 		tag.putBoolean("Idle", idle);
+		tag.putString("AndroidType", androidType.name());
+		tag.put("Inventory", inventory);
+		if (curios != null) {
+			tag.put("Curios", curios);
+		}
 		return tag;
 	}
 
@@ -52,9 +67,11 @@ public class AndroidRecord {
 		UUID id = tag.getUUID("Id");
 		ResourceKey<Level> dim = ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
 				new ResourceLocation(tag.getString("Dimension")));
-		AndroidRecord record = new AndroidRecord(id, dim,
-				new Vec3(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z")), tag.getFloat("Yaw"),
-				tag.getFloat("Pitch"), tag.getFloat("Health"), tag.getBoolean("Idle"));
-		return record;
+		AndroidType type = AndroidType.byName(tag.getString("AndroidType"));
+		ListTag inventory = tag.contains("Inventory") ? tag.getList("Inventory", 10) : new ListTag();
+		ListTag curios = tag.contains("Curios") ? tag.getList("Curios", 10) : null;
+		return new AndroidRecord(id, dim, new Vec3(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z")),
+				tag.getFloat("Yaw"), tag.getFloat("Pitch"), tag.getFloat("Health"), tag.getBoolean("Idle"), type,
+				inventory, curios);
 	}
 }

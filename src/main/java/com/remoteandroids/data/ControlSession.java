@@ -1,6 +1,8 @@
 package com.remoteandroids.data;
 
+import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceKey;
@@ -15,22 +17,33 @@ public class ControlSession {
 	public UUID playerId;
 	public UUID androidId;
 	public UUID standInId;
+	public AndroidType androidType;
 
 	public ResourceKey<Level> originalDimension;
 	public double x, y, z;
 	public float yaw, pitch;
 	public GameType originalGameType;
 	public float originalHealth;
-	public double originalMaxHealth;
 
 	public ListTag inventory;
+	@Nullable
+	public ListTag curios;
+	@Nullable
+	public CompoundTag tfcFoodData;
+	public ListTag effects;
+	/**
+	 * Whether the controlling player is dead, used to destroy the android on
+	 * swap-out
+	 */
+	public boolean dead;
 
-	public ControlSession(UUID playerId, UUID androidId, UUID standInId, ResourceKey<Level> originalDimension, Vec3 pos,
-			float yaw, float pitch, GameType originalGameType, float originalHealth, double originalMaxHealth,
-			ListTag inventory) {
+	public ControlSession(UUID playerId, UUID androidId, UUID standInId, AndroidType androidType,
+			ResourceKey<Level> originalDimension, Vec3 pos, float yaw, float pitch, GameType originalGameType,
+			float originalHealth, ListTag inventory) {
 		this.playerId = playerId;
 		this.androidId = androidId;
 		this.standInId = standInId;
+		this.androidType = androidType;
 		this.originalDimension = originalDimension;
 		this.x = pos.x;
 		this.y = pos.y;
@@ -39,7 +52,6 @@ public class ControlSession {
 		this.pitch = pitch;
 		this.originalGameType = originalGameType;
 		this.originalHealth = originalHealth;
-		this.originalMaxHealth = originalMaxHealth;
 		this.inventory = inventory;
 	}
 
@@ -52,6 +64,7 @@ public class ControlSession {
 		tag.putUUID("Player", playerId);
 		tag.putUUID("Android", androidId);
 		tag.putUUID("StandIn", standInId);
+		tag.putString("AndroidType", androidType.name());
 		tag.putString("Dimension", originalDimension.location().toString());
 		tag.putDouble("X", x);
 		tag.putDouble("Y", y);
@@ -60,8 +73,15 @@ public class ControlSession {
 		tag.putFloat("Pitch", pitch);
 		tag.putString("GameType", originalGameType.getName());
 		tag.putFloat("Health", originalHealth);
-		tag.putDouble("MaxHealth", originalMaxHealth);
 		tag.put("Inventory", inventory);
+		if (curios != null) {
+			tag.put("Curios", curios);
+		}
+		if (tfcFoodData != null) {
+			tag.put("TFCFoodData", tfcFoodData);
+		}
+		tag.put("Effects", effects);
+		tag.putBoolean("Dead", dead);
 		return tag;
 	}
 
@@ -69,16 +89,22 @@ public class ControlSession {
 		UUID player = tag.getUUID("Player");
 		UUID android = tag.getUUID("Android");
 		UUID standIn = tag.getUUID("StandIn");
+		AndroidType type = AndroidType.byName(tag.getString("AndroidType"));
 		ResourceKey<Level> dim = ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
 				new ResourceLocation(tag.getString("Dimension")));
 		Vec3 pos = new Vec3(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z"));
 		float yaw = tag.getFloat("Yaw");
 		float pitch = tag.getFloat("Pitch");
-		GameType gameType = GameType.byName(tag.getString("GameType"), GameType.SURVIVAL);
+		GameType gameType = GameType.byName(tag.getString("GameType"));
 		float health = tag.getFloat("Health");
-		double maxHealth = tag.getDouble("MaxHealth");
 		ListTag inventory = tag.getList("Inventory", 10);
-		return new ControlSession(player, android, standIn, dim, pos, yaw, pitch, gameType, health, maxHealth,
-				inventory);
+		ListTag curios = tag.contains("Curios") ? tag.getList("Curios", 10) : null;
+		ControlSession session = new ControlSession(player, android, standIn, type, dim, pos, yaw, pitch, gameType,
+				health, inventory);
+		session.curios = curios;
+		session.tfcFoodData = tag.contains("TFCFoodData") ? tag.getCompound("TFCFoodData") : null;
+		session.effects = tag.contains("Effects") ? tag.getList("Effects", 10) : new ListTag();
+		session.dead = tag.getBoolean("Dead");
+		return session;
 	}
 }

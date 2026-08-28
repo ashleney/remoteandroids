@@ -1,11 +1,13 @@
 package com.remoteandroids;
 
+import com.remoteandroids.compat.ModCompat;
 import com.remoteandroids.entity.AndroidEntity;
 import com.remoteandroids.entity.PlayerStandInEntity;
 import com.remoteandroids.event.ModEventHandlers;
 import com.remoteandroids.init.ModCreativeTabs;
 import com.remoteandroids.init.ModEntityTypes;
 import com.remoteandroids.init.ModItems;
+import com.remoteandroids.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -24,9 +26,13 @@ public class RemoteAndroids {
 		ModEntityTypes.ENTITY_TYPES.register(modBus);
 		ModCreativeTabs.CREATIVE_MODE_TABS.register(modBus);
 
+		ModNetwork.register();
+
 		modBus.addListener(this::registerAttributes);
 
 		MinecraftForge.EVENT_BUS.register(new ModEventHandlers());
+
+		ModCompat.register();
 	}
 
 	private void registerAttributes(EntityAttributeCreationEvent event) {

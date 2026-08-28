@@ -1,12 +1,15 @@
 package com.remoteandroids.event;
 
+import com.remoteandroids.compat.Mods;
 import com.remoteandroids.data.AndroidSavedData;
 import com.remoteandroids.data.AndroidTransfer;
+import com.remoteandroids.data.ControlSession;
 import com.remoteandroids.entity.AndroidEntity;
+import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import com.remoteandroids.entity.PlayerStandInEntity;
 import com.remoteandroids.init.ModItems;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -17,6 +20,8 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerRespawnEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public class ModEventHandlers {
@@ -31,12 +36,26 @@ public class ModEventHandlers {
 
 		if (event.getEntity() instanceof ServerPlayer player
 				&& AndroidSavedData.get((ServerLevel) player.level()).isControllingAndroid(player.getUUID())) {
-			ItemStack core = new ItemStack(ModItems.ANDROID_CORE.get());
-			player.spawnAtLocation(core);
-			event.setCanceled(true);
-			player.setHealth(player.getMaxHealth());
-			AndroidTransfer.swapOut(player, false);
+			AndroidSavedData data = AndroidSavedData.get((ServerLevel) player.level());
+			ControlSession session = data.getSession(player.getUUID());
+			if (session.androidType == AndroidType.SURVIVAL) {
+				player.spawnAtLocation(new ItemStack(getCoreForType(session.androidType)));
+				data.updateSessionDead(player.getUUID(), true);
+			} else {
+				player.spawnAtLocation(new ItemStack(getCoreForType(session.androidType)));
+				event.setCanceled(true);
+				player.setHealth(player.getMaxHealth());
+				AndroidTransfer.swapOut(player, false);
+			}
 		}
+	}
+
+	private static Item getCoreForType(AndroidType type) {
+		return switch (type) {
+			case OBSERVER -> ModItems.OBSERVER_CORE.get();
+			case SURVIVAL -> ModItems.SURVIVAL_CORE.get();
+			case ADVENTURE -> ModItems.ADVENTURE_CORE.get();
+		};
 	}
 
 	@SubscribeEvent
@@ -55,6 +74,28 @@ public class ModEventHandlers {
 	}
 
 	@SubscribeEvent
+	public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+		if (event.getEntity() instanceof ServerPlayer player && !player.level().isClientSide) {
+			ControlSession session = AndroidSavedData.get((ServerLevel) player.level()).getSession(player.getUUID());
+			if (session != null && session.androidType == AndroidType.OBSERVER) {
+				event.setCanceled(true);
+				event.setUseBlock(Event.Result.DENY);
+				event.setUseItem(Event.Result.DENY);
+			}
+		}
+	}
+
+	@SubscribeEvent
+	public void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
+		if (event.getEntity() instanceof ServerPlayer player && !player.level().isClientSide) {
+			ControlSession session = AndroidSavedData.get((ServerLevel) player.level()).getSession(player.getUUID());
+			if (session != null && session.androidType == AndroidType.OBSERVER) {
+				event.setCanceled(true);
+			}
+		}
+	}
+
+	@SubscribeEvent
 	public void onPlayerTick(TickEvent.PlayerTickEvent event) {
 		if (event.phase != TickEvent.Phase.END || event.player.level().isClientSide
 				|| !(event.player instanceof ServerPlayer player)) {
@@ -63,24 +104,26 @@ public class ModEventHandlers {
 		ServerLevel level = (ServerLevel) player.level();
 		var data = AndroidSavedData.get(level);
 		var session = data.getSession(player.getUUID());
-		if (session == null)
+		if (session == null || player.isDeadOrDying()) {
 			return;
-
-		AndroidTransfer.fillAndroidInventory(player);
-		player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0D);
-		if (player.getHealth() > 20.0F) {
-			player.setHealth(20.0F);
 		}
-		player.getFoodData().setFoodLevel(20);
-		player.getFoodData().setSaturation(0.0F);
 
-		if (player.containerMenu != null) {
+		if (session.androidType != AndroidType.SURVIVAL) {
+			AndroidTransfer.lockAllSlots(player);
+		}
+
+		if (!Mods.TFC.isLoaded()) {
+			player.getFoodData().setFoodLevel(20);
+			player.getFoodData().setSaturation(0.0F);
+		}
+
+		if (session.androidType != AndroidType.SURVIVAL) {
 			for (var slot : player.containerMenu.slots) {
 				if (slot.container == player.getInventory()) {
 					continue;
 				}
 				ItemStack stack = slot.getItem();
-				if (stack.is(ModItems.INVENTORY_LOCK.get()) || stack.is(ModItems.RECALL_CORE.get())) {
+				if (stack.is(ModItems.INVENTORY_LOCK.get()) || stack.is(ModItems.DISCONNECT.get())) {
 					slot.setByPlayer(ItemStack.EMPTY);
 				}
 			}
@@ -122,13 +165,16 @@ public class ModEventHandlers {
 
 	@SubscribeEvent
 	public void onItemToss(ItemTossEvent event) {
-		if (event.getPlayer().level() instanceof ServerLevel level
-				&& AndroidSavedData.get(level).isControllingAndroid(event.getPlayer().getUUID())) {
-			if (event.getEntity().getItem().is(ModItems.INVENTORY_LOCK.get())
-					|| event.getEntity().getItem().is(ModItems.RECALL_CORE.get())) {
-				event.setCanceled(true);
-				if (event.getPlayer() instanceof ServerPlayer player) {
-					AndroidTransfer.fillAndroidInventory(player);
+		if (event.getPlayer().level() instanceof ServerLevel level) {
+			ControlSession session = AndroidSavedData.get(level).getSession(event.getPlayer().getUUID());
+			if (session != null) {
+				ItemStack tossed = event.getEntity().getItem();
+				if (tossed.is(ModItems.DISCONNECT.get()) || tossed.is(ModItems.INVENTORY_LOCK.get())) {
+					event.setCanceled(true);
+					if (session.androidType != AndroidType.SURVIVAL
+							&& event.getPlayer() instanceof ServerPlayer player) {
+						AndroidTransfer.lockAllSlots(player);
+					}
 				}
 			}
 		}
@@ -136,9 +182,11 @@ public class ModEventHandlers {
 
 	@SubscribeEvent
 	public void onItemPickup(EntityItemPickupEvent event) {
-		if (event.getEntity() instanceof ServerPlayer player
-				&& AndroidSavedData.get((ServerLevel) player.level()).isControllingAndroid(player.getUUID())) {
-			event.setCanceled(true);
+		if (event.getEntity() instanceof ServerPlayer player && player.level() instanceof ServerLevel level) {
+			ControlSession session = AndroidSavedData.get(level).getSession(player.getUUID());
+			if (session != null && session.androidType != AndroidType.SURVIVAL) {
+				event.setCanceled(true);
+			}
 		}
 	}
 }

@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "remoteandroids:item/recall_core"
+    "layer0": "remoteandroids:item/observer_core"
   }
 }

@@ -2,6 +2,7 @@ package com.remoteandroids.item;
 
 import com.remoteandroids.data.AndroidTransfer;
 import com.remoteandroids.entity.AndroidEntity;
+import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
@@ -15,6 +16,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 
 /** Binds itself to an android and swaps the player on use. */
@@ -24,6 +26,11 @@ public class NeuralRemoteItem extends Item {
 
 	public NeuralRemoteItem(Properties properties) {
 		super(properties);
+	}
+
+	@Override
+	public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag isAdvanced) {
+		tooltip.add(Component.translatable("item.remoteandroids.neural_remote.desc").withStyle(ChatFormatting.GRAY));
 	}
 
 	@Nullable
@@ -61,8 +68,7 @@ public class NeuralRemoteItem extends Item {
 		UUID currentlyBound = getBoundAndroid(serverStack);
 		if (currentlyBound != null && currentlyBound.equals(android.getUUID())) {
 			player.displayClientMessage(
-					Component.literal("This remote is already bound to that android.").withStyle(ChatFormatting.YELLOW),
-					true);
+					Component.translatable("remoteandroids.msg.already_bound").withStyle(ChatFormatting.YELLOW), true);
 			return InteractionResult.SUCCESS;
 		}
 
@@ -70,8 +76,8 @@ public class NeuralRemoteItem extends Item {
 		player.setItemInHand(hand, serverStack);
 		player.getInventory().setChanged();
 
-		player.displayClientMessage(Component
-				.literal(currentlyBound == null ? "Remote bound to android." : "Remote re-bound to a new android.")
+		player.displayClientMessage(Component.translatable(
+				currentlyBound == null ? "remoteandroids.msg.remote_bound" : "remoteandroids.msg.remote_rebound")
 				.withStyle(ChatFormatting.AQUA), true);
 
 		return InteractionResult.SUCCESS;
@@ -88,26 +94,24 @@ public class NeuralRemoteItem extends Item {
 		UUID boundId = getBoundAndroid(stack);
 		if (boundId == null) {
 			serverPlayer.displayClientMessage(
-					Component.literal("This remote isn't bound yet. Right-click an android to bind it.")
-							.withStyle(ChatFormatting.RED),
-					true);
+					Component.translatable("remoteandroids.msg.not_bound_yet").withStyle(ChatFormatting.RED), true);
 			return InteractionResultHolder.fail(stack);
 		}
 
 		AndroidTransfer.Result result = AndroidTransfer.swapIn(serverPlayer, boundId);
 		switch (result) {
 			case SUCCESS -> serverPlayer.displayClientMessage(
-					Component.literal("Consciousness transferred.").withStyle(ChatFormatting.AQUA), true);
+					Component.translatable("remoteandroids.msg.transferred").withStyle(ChatFormatting.AQUA), true);
 			case ALREADY_CONTROLLING -> serverPlayer.displayClientMessage(
-					Component.literal("You are already inhabiting an android.").withStyle(ChatFormatting.RED), true);
+					Component.translatable("remoteandroids.msg.already_controlling").withStyle(ChatFormatting.RED),
+					true);
 			case ANDROID_BUSY -> serverPlayer.displayClientMessage(
-					Component.literal("That android is currently occupied.").withStyle(ChatFormatting.RED), true);
+					Component.translatable("remoteandroids.msg.android_busy").withStyle(ChatFormatting.RED), true);
 			case ANDROID_MISSING -> {
 				clearBoundAndroid(stack);
-				serverPlayer.displayClientMessage(Component.literal("That android no longer exists. Remote unbound.")
-						.withStyle(ChatFormatting.RED), true);
-			}
-			default -> {
+				serverPlayer.displayClientMessage(
+						Component.translatable("remoteandroids.msg.android_missing").withStyle(ChatFormatting.RED),
+						true);
 			}
 		}
 

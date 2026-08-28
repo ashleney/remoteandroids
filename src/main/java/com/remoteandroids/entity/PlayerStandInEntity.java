@@ -1,11 +1,13 @@
 package com.remoteandroids.entity;
 
+import com.remoteandroids.data.AndroidSavedData;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -25,7 +27,6 @@ public class PlayerStandInEntity extends PathfinderMob {
 		super(type, level);
 		this.setNoAi(true);
 		this.setNoGravity(false);
-		this.setPersistenceRequired();
 	}
 
 	public static AttributeSupplier.Builder createAttributes() {
@@ -42,6 +43,16 @@ public class PlayerStandInEntity extends PathfinderMob {
 	protected void defineSynchedData() {
 		super.defineSynchedData();
 		this.entityData.define(OWNER_UUID, Optional.empty());
+	}
+
+	@Override
+	public void tick() {
+		super.tick();
+		if (!this.level().isClientSide && this.level() instanceof ServerLevel serverLevel) {
+			if (AndroidSavedData.get(serverLevel).getSessionByStandIn(this.getUUID()) == null) {
+				this.discard();
+			}
+		}
 	}
 
 	public void setOwnerUuid(UUID ownerUuid) {

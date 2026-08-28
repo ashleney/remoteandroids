@@ -1,5 +1,6 @@
 package com.remoteandroids.data;
 
+import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -26,8 +27,9 @@ public class AndroidSavedData extends SavedData {
 	}
 
 	public AndroidRecord createAndroid(UUID id, ResourceKey<Level> dimension, Vec3 pos, float yaw, float pitch,
-			float health) {
-		AndroidRecord record = new AndroidRecord(id, dimension, pos, yaw, pitch, health, true);
+			float health, AndroidType androidType) {
+		AndroidRecord record = new AndroidRecord(id, dimension, pos, yaw, pitch, health, true, androidType,
+				new ListTag(), null);
 		androids.put(id, record);
 		setDirty();
 		return record;
@@ -36,13 +38,6 @@ public class AndroidSavedData extends SavedData {
 	@Nullable
 	public AndroidRecord getAndroid(UUID id) {
 		return androids.get(id);
-	}
-
-	public void updateAndroidPosition(UUID id, Level level, Vec3 pos, float yaw, float pitch) {
-		AndroidRecord record = androids.get(id);
-		if (record != null) {
-			updateAndroidState(id, level, pos, yaw, pitch, record.health);
-		}
 	}
 
 	public void updateAndroidState(UUID id, Level level, Vec3 pos, float yaw, float pitch, float health) {
@@ -63,6 +58,22 @@ public class AndroidSavedData extends SavedData {
 		AndroidRecord record = androids.get(id);
 		if (record != null) {
 			record.idle = idle;
+			setDirty();
+		}
+	}
+
+	public void updateAndroidInventory(UUID id, ListTag inventory) {
+		AndroidRecord record = androids.get(id);
+		if (record != null) {
+			record.inventory = inventory;
+			setDirty();
+		}
+	}
+
+	public void updateAndroidCurios(UUID id, ListTag curios) {
+		AndroidRecord record = androids.get(id);
+		if (record != null) {
+			record.curios = curios;
 			setDirty();
 		}
 	}
@@ -99,6 +110,14 @@ public class AndroidSavedData extends SavedData {
 
 	public void endSession(UUID playerId) {
 		if (sessions.remove(playerId) != null) {
+			setDirty();
+		}
+	}
+
+	public void updateSessionDead(UUID playerId, boolean dead) {
+		ControlSession session = sessions.get(playerId);
+		if (session != null) {
+			session.dead = dead;
 			setDirty();
 		}
 	}

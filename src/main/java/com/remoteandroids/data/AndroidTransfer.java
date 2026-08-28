@@ -1,18 +1,25 @@
 package com.remoteandroids.data;
 
+import com.remoteandroids.compat.CuriosHandler;
+import com.remoteandroids.compat.Mods;
+import com.remoteandroids.compat.TFCHandler;
 import com.remoteandroids.entity.AndroidEntity;
+import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import com.remoteandroids.entity.PlayerStandInEntity;
 import com.remoteandroids.init.ModEntityTypes;
 import com.remoteandroids.init.ModItems;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
@@ -31,6 +38,16 @@ public final class AndroidTransfer {
 		level.getChunk(new BlockPos((int) pos.x, (int) pos.y, (int) pos.z));
 	}
 
+	/** Mirrors the player's armor and held items onto a body entity for display. */
+	private static void equipBody(ServerPlayer player, LivingEntity body) {
+		body.setItemSlot(EquipmentSlot.FEET, player.getInventory().armor.get(0).copy());
+		body.setItemSlot(EquipmentSlot.LEGS, player.getInventory().armor.get(1).copy());
+		body.setItemSlot(EquipmentSlot.CHEST, player.getInventory().armor.get(2).copy());
+		body.setItemSlot(EquipmentSlot.HEAD, player.getInventory().armor.get(3).copy());
+		body.setItemSlot(EquipmentSlot.MAINHAND, player.getMainHandItem().copy());
+		body.setItemSlot(EquipmentSlot.OFFHAND, player.getInventory().offhand.get(0).copy());
+	}
+
 	public static Result swapIn(ServerPlayer player, UUID androidId) {
 		MinecraftServer server = player.getServer();
 		AndroidSavedData data = AndroidSavedData.get((ServerLevel) player.level());
@@ -47,62 +64,109 @@ public final class AndroidTransfer {
 			return Result.ANDROID_BUSY;
 		}
 
+		float androidHealth = despawnAndroid(server, record);
+		ControlSession session = capturePlayer(player, record);
+		PlayerStandInEntity standIn = spawnStandIn(player, session);
+		detachPlayer(player, session, standIn, record);
+
+		data.startSession(session);
+		((ServerLevel) player.level()).addFreshEntity(standIn);
+
+		enterAndroidState(player, data, session, record, androidHealth);
+
+		return Result.SUCCESS;
+	}
+
+	private static float despawnAndroid(MinecraftServer server, AndroidRecord record) {
 		ServerLevel androidLevel = server.getLevel(record.dimension);
 		forceLoadChunk(androidLevel, record.pos());
-		Entity found = androidLevel.getEntity(androidId);
-		float androidHealth = record.health;
+		Entity found = androidLevel.getEntity(record.id);
 		if (found instanceof AndroidEntity androidEntity) {
-			androidHealth = androidEntity.getHealth();
+			float health = androidEntity.getHealth();
 			androidEntity.discard();
+			return health;
 		}
+		return record.health;
+	}
 
+	private static ControlSession capturePlayer(ServerPlayer player, AndroidRecord record) {
 		ServerLevel originalLevel = (ServerLevel) player.level();
 		Vec3 originalPos = player.position();
 		float originalYaw = player.getYRot();
 		float originalPitch = player.getXRot();
 		GameType originalGameType = player.gameMode.getGameModeForPlayer();
 		float originalHealth = player.getHealth();
-		double originalMaxHealth = player.getAttributeValue(Attributes.MAX_HEALTH);
 		ListTag savedInventory = player.getInventory().save(new ListTag());
 
-		UUID standInId = UUID.randomUUID();
-		PlayerStandInEntity standIn = new PlayerStandInEntity(ModEntityTypes.PLAYER_STAND_IN.get(), originalLevel);
-		standIn.setUUID(standInId);
-		standIn.setOwnerUuid(player.getUUID());
-		standIn.moveTo(originalPos.x, originalPos.y, originalPos.z, originalYaw, originalPitch);
-		standIn.setYHeadRot(originalYaw);
-		standIn.setYBodyRot(originalYaw);
-		standIn.setYRot(originalYaw);
-		standIn.setXRot(originalPitch);
-		if (player.getGameProfile() != null) {
-			standIn.setCustomName(Component.literal(player.getGameProfile().getName()));
-		}
-		originalLevel.addFreshEntity(standIn);
-
-		ControlSession session = new ControlSession(player.getUUID(), androidId, standInId, originalLevel.dimension(),
-				originalPos, originalYaw, originalPitch, originalGameType, originalHealth, originalMaxHealth,
+		return new ControlSession(player.getUUID(), record.id, UUID.randomUUID(), record.androidType,
+				originalLevel.dimension(), originalPos, originalYaw, originalPitch, originalGameType, originalHealth,
 				savedInventory);
-		data.startSession(session);
-
-		data.setAndroidIdle(androidId, false);
-		data.updateAndroidState(androidId, androidLevel, record.pos(), record.yaw, record.pitch, androidHealth);
-
-		player.teleportTo(androidLevel, record.x, record.y, record.z, record.yaw, record.pitch);
-		fillAndroidInventory(player);
-		player.setGameMode(GameType.ADVENTURE);
-		player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0D);
-		player.setHealth(Math.max(1.0F, Math.min(20.0F, androidHealth)));
-		player.getFoodData().setFoodLevel(20);
-		player.getFoodData().setSaturation(0.0F);
-
-		return Result.SUCCESS;
 	}
 
-	public static void fillAndroidInventory(ServerPlayer player) {
+	private static PlayerStandInEntity spawnStandIn(ServerPlayer player, ControlSession session) {
+		ServerLevel originalLevel = (ServerLevel) player.level();
+		PlayerStandInEntity standIn = new PlayerStandInEntity(ModEntityTypes.PLAYER_STAND_IN.get(), originalLevel);
+		standIn.setUUID(session.standInId);
+		standIn.setOwnerUuid(player.getUUID());
+		Vec3 pos = session.pos();
+		standIn.moveTo(pos.x, pos.y, pos.z, session.yaw, session.pitch);
+		standIn.setYHeadRot(session.yaw);
+		standIn.setYBodyRot(session.yaw);
+		standIn.setYRot(session.yaw);
+		standIn.setXRot(session.pitch);
+		standIn.setCustomName(Component.literal(player.getGameProfile().getName()));
+		equipBody(player, standIn);
+		return standIn;
+	}
+
+	private static void detachPlayer(ServerPlayer player, ControlSession session, PlayerStandInEntity standIn,
+			AndroidRecord record) {
+		if (Mods.CURIOS.isLoaded()) {
+			session.curios = CuriosHandler.saveAndClear(player);
+			if (record.androidType == AndroidType.SURVIVAL) {
+				CuriosHandler.restore(player, record.curios);
+			}
+			CuriosHandler.restore(standIn, session.curios);
+		}
+		if (Mods.TFC.isLoaded()) {
+			session.tfcFoodData = TFCHandler.saveFoodData(player);
+			TFCHandler.resetFoodData(player);
+		}
+		session.effects = saveEffects(player);
+		player.removeAllEffects();
+		player.clearFire();
+	}
+
+	private static void enterAndroidState(ServerPlayer player, AndroidSavedData data, ControlSession session,
+			AndroidRecord record, float androidHealth) {
+		MinecraftServer server = player.getServer();
+		ServerLevel androidLevel = server.getLevel(record.dimension);
+		data.setAndroidIdle(session.androidId, false);
+		data.updateAndroidState(session.androidId, androidLevel, record.pos(), record.yaw, record.pitch, androidHealth);
+
+		player.teleportTo(androidLevel, record.x, record.y, record.z, record.yaw, record.pitch);
+
+		if (session.androidType == AndroidType.SURVIVAL) {
+			player.getInventory().clearContent();
+			player.getInventory().load(record.inventory);
+		} else {
+			lockAllSlots(player);
+		}
+
+		GameType targetMode = session.androidType == AndroidType.SURVIVAL ? GameType.SURVIVAL : GameType.ADVENTURE;
+		player.setGameMode(targetMode);
+		player.setHealth(Math.max(1.0F, Math.min(player.getMaxHealth(), androidHealth)));
+		player.getFoodData().setFoodLevel(20);
+		player.getFoodData().setSaturation(0.0F);
+	}
+
+	/** Prevent the inventory from being used and give a disconnect item. */
+	public static void lockAllSlots(ServerPlayer player) {
 		var inventory = player.getInventory();
 		ItemStack lock = new ItemStack(ModItems.INVENTORY_LOCK.get());
+		ItemStack disconnect = new ItemStack(ModItems.DISCONNECT.get());
 		inventory.clearContent();
-		inventory.setItem(0, new ItemStack(ModItems.RECALL_CORE.get()));
+		inventory.setItem(0, disconnect);
 		for (int slot = 1; slot < inventory.items.size(); slot++) {
 			inventory.setItem(slot, lock.copy());
 		}
@@ -115,64 +179,120 @@ public final class AndroidTransfer {
 	}
 
 	public static Result swapOut(ServerPlayer player) {
-		return swapOut(player, true);
+		AndroidSavedData data = AndroidSavedData.get((ServerLevel) player.level());
+		ControlSession session = data.getSession(player.getUUID());
+		boolean respawnAndroid = session == null || !session.dead;
+		return swapOut(player, respawnAndroid);
 	}
 
 	public static Result swapOut(ServerPlayer player, boolean respawnAndroid) {
-		MinecraftServer server = player.getServer();
-		if (server == null)
-			return Result.NOT_CONTROLLING;
-
 		AndroidSavedData data = AndroidSavedData.get((ServerLevel) player.level());
 		ControlSession session = data.getSession(player.getUUID());
 		if (session == null) {
 			return Result.NOT_CONTROLLING;
 		}
 
+		despawnStandIn(player.getServer(), session);
+		respawnAndroid(player, data, session, respawnAndroid);
+		restorePlayer(player, session);
+
+		data.endSession(player.getUUID());
+
+		return Result.SUCCESS;
+	}
+
+	private static void despawnStandIn(MinecraftServer server, ControlSession session) {
 		ServerLevel originalLevel = server.getLevel(session.originalDimension);
 		forceLoadChunk(originalLevel, session.pos());
 		Entity standIn = originalLevel.getEntity(session.standInId);
 		if (standIn != null) {
 			standIn.discard();
 		}
+	}
 
+	private static void respawnAndroid(ServerPlayer player, AndroidSavedData data, ControlSession session,
+			boolean respawnAndroid) {
 		AndroidRecord savedAndroid = data.getAndroid(session.androidId);
 		ServerLevel currentLevel = savedAndroid == null
 				? (ServerLevel) player.level()
-				: server.getLevel(savedAndroid.dimension);
+				: player.getServer().getLevel(savedAndroid.dimension);
 		Vec3 currentPos = savedAndroid == null ? player.position() : savedAndroid.pos();
 		float currentYaw = savedAndroid == null ? player.getYHeadRot() : savedAndroid.yaw;
 		float currentPitch = savedAndroid == null ? player.getXRot() : savedAndroid.pitch;
 
-		if (respawnAndroid) {
-			AndroidEntity android = new AndroidEntity(ModEntityTypes.ANDROID.get(), currentLevel);
-			android.setUUID(session.androidId);
-			android.moveTo(currentPos.x, currentPos.y, currentPos.z, currentYaw, currentPitch);
-			android.setYHeadRot(currentYaw);
-			android.setYBodyRot(currentYaw);
-			android.setYRot(currentYaw);
-			android.setXRot(currentPitch);
-			if (savedAndroid != null) {
-				android.setHealth(Math.max(1.0F, Math.min(android.getMaxHealth(), savedAndroid.health)));
-			}
-			currentLevel.addFreshEntity(android);
-
-			data.setAndroidIdle(session.androidId, true);
-			data.updateAndroidState(session.androidId, currentLevel, currentPos, currentYaw, currentPitch,
-					android.getHealth());
-		} else {
+		if (!respawnAndroid) {
 			data.removeAndroid(session.androidId);
+			return;
 		}
 
+		data.setAndroidIdle(session.androidId, true);
+
+		AndroidEntity android = new AndroidEntity(ModEntityTypes.ANDROID.get(), currentLevel);
+		android.setUUID(session.androidId);
+		android.setAndroidType(session.androidType);
+		android.moveTo(currentPos.x, currentPos.y, currentPos.z, currentYaw, currentPitch);
+		android.setYHeadRot(currentYaw);
+		android.setYBodyRot(currentYaw);
+		android.setYRot(currentYaw);
+		android.setXRot(currentPitch);
+		if (savedAndroid != null) {
+			android.setHealth(Math.max(1.0F, Math.min(android.getMaxHealth(), savedAndroid.health)));
+		}
+		if (session.androidType == AndroidType.SURVIVAL) {
+			equipBody(player, android);
+			if (Mods.CURIOS.isLoaded()) {
+				CuriosHandler.restore(android, CuriosHandler.saveSnapshot(player));
+			}
+		}
+		currentLevel.addFreshEntity(android);
+
+		if (session.androidType == AndroidType.SURVIVAL) {
+			ListTag inventoryCopy = player.getInventory().save(new ListTag());
+			data.updateAndroidInventory(session.androidId, inventoryCopy);
+			if (Mods.CURIOS.isLoaded()) {
+				ListTag curiosCopy = CuriosHandler.saveSnapshot(player);
+				data.updateAndroidCurios(session.androidId, curiosCopy);
+			}
+		}
+
+		data.updateAndroidState(session.androidId, currentLevel, currentPos, currentYaw, currentPitch,
+				android.getHealth());
+	}
+
+	private static void restorePlayer(ServerPlayer player, ControlSession session) {
+		MinecraftServer server = player.getServer();
+		ServerLevel originalLevel = server.getLevel(session.originalDimension);
 		player.teleportTo(originalLevel, session.x, session.y, session.z, session.yaw, session.pitch);
-		player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(session.originalMaxHealth);
 		player.setHealth(Math.max(1.0F, Math.min(player.getMaxHealth(), session.originalHealth)));
 		player.getInventory().clearContent();
 		player.getInventory().load(session.inventory);
 		player.setGameMode(session.originalGameType);
 
-		data.endSession(player.getUUID());
+		if (Mods.CURIOS.isLoaded()) {
+			CuriosHandler.restore(player, session.curios);
+		}
+		if (Mods.TFC.isLoaded()) {
+			TFCHandler.restoreFoodData(player, session.tfcFoodData);
+		}
+		player.removeAllEffects();
+		player.clearFire();
+		restoreEffects(player, session.effects);
+	}
 
-		return Result.SUCCESS;
+	private static ListTag saveEffects(ServerPlayer player) {
+		ListTag list = new ListTag();
+		for (MobEffectInstance effect : player.getActiveEffects()) {
+			list.add(effect.save(new CompoundTag()));
+		}
+		return list;
+	}
+
+	private static void restoreEffects(ServerPlayer player, ListTag effects) {
+		for (int i = 0; i < effects.size(); i++) {
+			MobEffectInstance effect = MobEffectInstance.load(effects.getCompound(i));
+			if (effect != null) {
+				player.addEffect(effect);
+			}
+		}
 	}
 }

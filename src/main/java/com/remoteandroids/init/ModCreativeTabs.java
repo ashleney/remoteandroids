@@ -15,10 +15,12 @@ public class ModCreativeTabs {
 
 	public static final RegistryObject<CreativeModeTab> REMOTE_ANDROIDS = CREATIVE_MODE_TABS.register("main",
 			() -> CreativeModeTab.builder().title(Component.translatable("itemGroup.remoteandroids"))
-					.icon(() -> new ItemStack(ModItems.ANDROID_CORE.get())).displayItems((parameters, output) -> {
-						output.accept(ModItems.ANDROID_CORE.get());
+					.icon(() -> new ItemStack(ModItems.OBSERVER_CORE.get())).displayItems((parameters, output) -> {
+						output.accept(ModItems.OBSERVER_CORE.get());
+						output.accept(ModItems.ADVENTURE_CORE.get());
+						output.accept(ModItems.SURVIVAL_CORE.get());
 						output.accept(ModItems.NEURAL_REMOTE.get());
-						output.accept(ModItems.RECALL_CORE.get());
+						output.accept(ModItems.DISCONNECT.get());
 					}).build());
 
 	private ModCreativeTabs() {
