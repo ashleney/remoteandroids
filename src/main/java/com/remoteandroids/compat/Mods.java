@@ -4,7 +4,7 @@ import net.minecraftforge.fml.ModList;
 
 /** Runtime mod presence checks. */
 public enum Mods {
-	CURIOS("curios"), TFC("tfc");
+	CURIOS("curios"), TFC("tfc"), COSMETIC_ARMOR("cosmeticarmorreworked");
 
 	private final String modId;
 	private Boolean loaded;

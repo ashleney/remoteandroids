@@ -99,21 +99,10 @@ public class NeuralRemoteItem extends Item {
 		}
 
 		AndroidTransfer.Result result = AndroidTransfer.swapIn(serverPlayer, boundId);
-		switch (result) {
-			case SUCCESS -> serverPlayer.displayClientMessage(
-					Component.translatable("remoteandroids.msg.transferred").withStyle(ChatFormatting.AQUA), true);
-			case ALREADY_CONTROLLING -> serverPlayer.displayClientMessage(
-					Component.translatable("remoteandroids.msg.already_controlling").withStyle(ChatFormatting.RED),
-					true);
-			case ANDROID_BUSY -> serverPlayer.displayClientMessage(
-					Component.translatable("remoteandroids.msg.android_busy").withStyle(ChatFormatting.RED), true);
-			case ANDROID_MISSING -> {
-				clearBoundAndroid(stack);
-				serverPlayer.displayClientMessage(
-						Component.translatable("remoteandroids.msg.android_missing").withStyle(ChatFormatting.RED),
-						true);
-			}
+		if (result == AndroidTransfer.Result.ANDROID_MISSING) {
+			clearBoundAndroid(stack);
 		}
+		AndroidTransfer.describe(serverPlayer, result);
 
 		return result == AndroidTransfer.Result.SUCCESS
 				? InteractionResultHolder.success(stack)

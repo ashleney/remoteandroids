@@ -29,6 +29,8 @@ public class ControlSession {
 	@Nullable
 	public ListTag curios;
 	@Nullable
+	public CompoundTag cosArmor;
+	@Nullable
 	public CompoundTag tfcFoodData;
 	public ListTag effects;
 	/**
@@ -77,6 +79,9 @@ public class ControlSession {
 		if (curios != null) {
 			tag.put("Curios", curios);
 		}
+		if (cosArmor != null) {
+			tag.put("CosArmor", cosArmor);
+		}
 		if (tfcFoodData != null) {
 			tag.put("TFCFoodData", tfcFoodData);
 		}
@@ -102,6 +107,7 @@ public class ControlSession {
 		ControlSession session = new ControlSession(player, android, standIn, type, dim, pos, yaw, pitch, gameType,
 				health, inventory);
 		session.curios = curios;
+		session.cosArmor = tag.contains("CosArmor") ? tag.getCompound("CosArmor") : null;
 		session.tfcFoodData = tag.contains("TFCFoodData") ? tag.getCompound("TFCFoodData") : null;
 		session.effects = tag.contains("Effects") ? tag.getList("Effects", 10) : new ListTag();
 		session.dead = tag.getBoolean("Dead");

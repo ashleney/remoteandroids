@@ -8,6 +8,7 @@ import com.remoteandroids.entity.AndroidEntity;
 import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import com.remoteandroids.entity.PlayerStandInEntity;
 import com.remoteandroids.init.ModItems;
+import lain.mods.cos.impl.inventory.ContainerCosArmor;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -106,6 +107,10 @@ public class ModEventHandlers {
 		var session = data.getSession(player.getUUID());
 		if (session == null || player.isDeadOrDying()) {
 			return;
+		}
+
+		if (Mods.COSMETIC_ARMOR.isLoaded() && player.containerMenu instanceof ContainerCosArmor) {
+			player.closeContainer();
 		}
 
 		if (session.androidType != AndroidType.SURVIVAL) {

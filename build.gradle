@@ -68,6 +68,7 @@ dependencies {
     compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
     runtimeOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
     compileOnly fg.deobf("curse.maven:terrafirmacraft-302973:7730077") { transitive = false }
+    compileOnly fg.deobf("curse.maven:cosmeticarmorreworked-237307:4592959") { transitive = false }
 }
 
 tasks.named('processResources', ProcessResources).configure {

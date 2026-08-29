@@ -20,5 +20,6 @@ public class ClientModEvents {
 	@SubscribeEvent
 	public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
 		event.register(ClientKeyHandler.DISCONNECT_KEY);
+		event.register(ClientKeyHandler.REENTER_KEY);
 	}
 }

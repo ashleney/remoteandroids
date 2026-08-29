@@ -3,6 +3,7 @@ package com.remoteandroids.client;
 import com.remoteandroids.RemoteAndroids;
 import com.remoteandroids.network.DisconnectPacket;
 import com.remoteandroids.network.ModNetwork;
+import com.remoteandroids.network.ReenterPacket;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
@@ -17,6 +18,9 @@ public class ClientKeyHandler {
 	public static final KeyMapping DISCONNECT_KEY = new KeyMapping("key.remoteandroids.disconnect",
 			GLFW.GLFW_KEY_UNKNOWN, "key.remoteandroids.category");
 
+	public static final KeyMapping REENTER_KEY = new KeyMapping("key.remoteandroids.reenter", GLFW.GLFW_KEY_UNKNOWN,
+			"key.remoteandroids.category");
+
 	@SubscribeEvent
 	public static void onKeyInput(InputEvent.Key event) {
 		Minecraft mc = Minecraft.getInstance();
@@ -25,6 +29,9 @@ public class ClientKeyHandler {
 		}
 		while (DISCONNECT_KEY.consumeClick()) {
 			ModNetwork.CHANNEL.sendToServer(new DisconnectPacket());
+		}
+		while (REENTER_KEY.consumeClick()) {
+			ModNetwork.CHANNEL.sendToServer(new ReenterPacket());
 		}
 	}
 }

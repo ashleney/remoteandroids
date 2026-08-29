@@ -1,5 +1,6 @@
 package com.remoteandroids.data;
 
+import com.remoteandroids.compat.CosArmorHandler;
 import com.remoteandroids.compat.CuriosHandler;
 import com.remoteandroids.compat.Mods;
 import com.remoteandroids.compat.TFCHandler;
@@ -8,6 +9,8 @@ import com.remoteandroids.entity.AndroidEntity.AndroidType;
 import com.remoteandroids.entity.PlayerStandInEntity;
 import com.remoteandroids.init.ModEntityTypes;
 import com.remoteandroids.init.ModItems;
+import com.remoteandroids.network.ControlStatePacket;
+import com.remoteandroids.network.ModNetwork;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -23,6 +26,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.PacketDistributor;
 
 /** Utility class for swapping an android and a player. */
 public final class AndroidTransfer {
@@ -32,6 +36,24 @@ public final class AndroidTransfer {
 
 	public enum Result {
 		SUCCESS, ALREADY_CONTROLLING, NOT_CONTROLLING, ANDROID_MISSING, ANDROID_BUSY
+	}
+
+	/** Shows the outcome of a transfer attempt to the player. */
+	public static void describe(ServerPlayer player, Result result) {
+		switch (result) {
+			case SUCCESS -> player.displayClientMessage(Component.translatable("remoteandroids.msg.transferred")
+					.withStyle(net.minecraft.ChatFormatting.AQUA), true);
+			case ALREADY_CONTROLLING ->
+				player.displayClientMessage(Component.translatable("remoteandroids.msg.already_controlling")
+						.withStyle(net.minecraft.ChatFormatting.RED), true);
+			case ANDROID_BUSY -> player.displayClientMessage(Component.translatable("remoteandroids.msg.android_busy")
+					.withStyle(net.minecraft.ChatFormatting.RED), true);
+			case ANDROID_MISSING ->
+				player.displayClientMessage(Component.translatable("remoteandroids.msg.android_missing")
+						.withStyle(net.minecraft.ChatFormatting.RED), true);
+			default -> {
+			}
+		}
 	}
 
 	private static void forceLoadChunk(ServerLevel level, Vec3 pos) {
@@ -73,6 +95,7 @@ public final class AndroidTransfer {
 		((ServerLevel) player.level()).addFreshEntity(standIn);
 
 		enterAndroidState(player, data, session, record, androidHealth);
+		ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ControlStatePacket(true));
 
 		return Result.SUCCESS;
 	}
@@ -116,6 +139,10 @@ public final class AndroidTransfer {
 		standIn.setXRot(session.pitch);
 		standIn.setCustomName(Component.literal(player.getGameProfile().getName()));
 		equipBody(player, standIn);
+		if (Mods.COSMETIC_ARMOR.isLoaded()) {
+			session.cosArmor = CosArmorHandler.snapshot(player);
+			CosArmorHandler.apply(standIn, session.cosArmor);
+		}
 		return standIn;
 	}
 
@@ -196,6 +223,10 @@ public final class AndroidTransfer {
 		respawnAndroid(player, data, session, respawnAndroid);
 		restorePlayer(player, session);
 
+		ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ControlStatePacket(false));
+
+		data.setLastAndroid(player.getUUID(), session.androidId);
+
 		data.endSession(player.getUUID());
 
 		return Result.SUCCESS;
@@ -269,6 +300,7 @@ public final class AndroidTransfer {
 		player.setGameMode(session.originalGameType);
 
 		if (Mods.CURIOS.isLoaded()) {
+			CuriosHandler.clear(player);
 			CuriosHandler.restore(player, session.curios);
 		}
 		if (Mods.TFC.isLoaded()) {

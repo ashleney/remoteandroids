@@ -20,6 +20,7 @@ public class AndroidSavedData extends SavedData {
 
 	private final Map<UUID, AndroidRecord> androids = new HashMap<>();
 	private final Map<UUID, ControlSession> sessions = new HashMap<>(); // keyed by player UUID
+	private final Map<UUID, UUID> lastAndroid = new HashMap<>(); // keyed by player UUID
 
 	public static AndroidSavedData get(ServerLevel anyLevel) {
 		ServerLevel overworld = anyLevel.getServer().getLevel(Level.OVERWORLD);
@@ -82,6 +83,9 @@ public class AndroidSavedData extends SavedData {
 		if (androids.remove(id) != null) {
 			setDirty();
 		}
+		if (lastAndroid.values().remove(id)) {
+			setDirty();
+		}
 	}
 
 	public boolean isControllingAndroid(UUID playerId) {
@@ -122,6 +126,16 @@ public class AndroidSavedData extends SavedData {
 		}
 	}
 
+	public void setLastAndroid(UUID playerId, UUID androidId) {
+		lastAndroid.put(playerId, androidId);
+		setDirty();
+	}
+
+	@Nullable
+	public UUID getLastAndroid(UUID playerId) {
+		return lastAndroid.get(playerId);
+	}
+
 	public static AndroidSavedData load(CompoundTag tag) {
 		AndroidSavedData data = new AndroidSavedData();
 		ListTag androidList = tag.getList("Androids", 10);
@@ -133,6 +147,11 @@ public class AndroidSavedData extends SavedData {
 		for (int i = 0; i < sessionList.size(); i++) {
 			ControlSession session = ControlSession.load(sessionList.getCompound(i));
 			data.sessions.put(session.playerId, session);
+		}
+		ListTag lastList = tag.getList("LastAndroid", 10);
+		for (int i = 0; i < lastList.size(); i++) {
+			CompoundTag entry = lastList.getCompound(i);
+			data.lastAndroid.put(entry.getUUID("Player"), entry.getUUID("Android"));
 		}
 		return data;
 	}
@@ -150,6 +169,15 @@ public class AndroidSavedData extends SavedData {
 			sessionList.add(session.save());
 		}
 		tag.put("Sessions", sessionList);
+
+		ListTag lastList = new ListTag();
+		for (Map.Entry<UUID, UUID> entry : lastAndroid.entrySet()) {
+			CompoundTag entryTag = new CompoundTag();
+			entryTag.putUUID("Player", entry.getKey());
+			entryTag.putUUID("Android", entry.getValue());
+			lastList.add(entryTag);
+		}
+		tag.put("LastAndroid", lastList);
 		return tag;
 	}
 }

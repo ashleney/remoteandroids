@@ -17,5 +17,9 @@ public final class ModNetwork {
 	public static void register() {
 		CHANNEL.registerMessage(id++, DisconnectPacket.class, DisconnectPacket::encode, DisconnectPacket::decode,
 				DisconnectPacket::handle);
+		CHANNEL.registerMessage(id++, ReenterPacket.class, ReenterPacket::encode, ReenterPacket::decode,
+				ReenterPacket::handle);
+		CHANNEL.registerMessage(id++, ControlStatePacket.class, ControlStatePacket::encode, ControlStatePacket::decode,
+				ControlStatePacket::handle);
 	}
 }
